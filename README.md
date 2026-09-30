@@ -39,7 +39,7 @@ Python 3.10+: winget install --id Python.Python.3.12 -e
 ```bash
 # 1. Склонировать репозиторий
 git clone https://github.com/AnGeJloV/gh-trends.git
-cd project
+cd gh-trends
 
 # 2. Поднять инфраструктуру (ClickHouse + MinIO + авто-создание бакета raw)
 docker compose up -d
