@@ -28,8 +28,14 @@ flowchart LR
 
 ## Быстрый старт
 
-Нужны: [Docker Desktop](https://www.docker.com/products/docker-desktop/) и Python 3.10+.
+Нужны: Docker Desktop и Python 3.10+.
 
+Если нету:
+```
+Docker Desktop: https://www.docker.com/products/docker-desktop/
+Python 3.10+: winget install --id Python.Python.3.12 -e
+```
+Если установлено:
 ```bash
 # 1. Склонировать репозиторий
 git clone https://github.com/AnGeJloV/gh-trends.git
