@@ -1,0 +1,68 @@
+services:
+  # Колоночное хранилище: сырые события и агрегаты
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8.14.39
+    container_name: gh_clickhouse
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: clickhouse   # учебный проект, пароль простой; логин/пароль нужны для HTTP-клиентов (порт 8123)
+      CLICKHOUSE_DB: gh                 # база проекта создаётся автоматически при старте
+    ports:
+      - "8123:8123"   # HTTP-интерфейс (через него работают все клиенты)
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse          # данные переживают перезапуск
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-совместимое хранилище для сырых архивов.
+  # ВАЖНО: официальный образ minio/minio удалён с Docker Hub (MinIO закрыл
+  # community-версию), поэтому используем последнее сообщество-сборку
+  # от Bitnami — это тот же MinIO 2025.7.23, протокол и консоль те же.
+  minio:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    container_name: gh_minio
+    command: minio server /bitnami/minio/data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API (Spark читает отсюда)
+      - "9001:9001"   # веб-консоль MinIO
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Одноразовый сервис: создаёт бакет raw при запуске и выходит.
+  # Если бакет уже есть — просто завершается, ничего не ломая.
+  minio-init:
+    image: amazon/aws-cli:2.37.6
+    container_name: gh_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      aws --endpoint-url http://minio:9000 s3api head-bucket --bucket raw 2>/dev/null ||
+      aws --endpoint-url http://minio:9000 s3api create-bucket --bucket raw;
+      echo 'Бакет raw готов';
+      exit 0
+      "
+
+volumes:
+  clickhouse_data:
+  minio_data:

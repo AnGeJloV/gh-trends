@@ -1,0 +1,19 @@
+# Игнорируем данные и мусор — в git попадает только код и конфиги
+data/
+*.json.gz
+*.parquet
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
