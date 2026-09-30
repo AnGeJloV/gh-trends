@@ -32,7 +32,7 @@ flowchart LR
 
 ```bash
 # 1. Склонировать репозиторий
-git clone <адрес-репо>
+git clone https://github.com/AnGeJloV/gh-trends.git
 cd project
 
 # 2. Поднять инфраструктуру (ClickHouse + MinIO + авто-создание бакета raw)
