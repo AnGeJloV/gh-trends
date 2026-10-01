@@ -84,4 +84,5 @@ python scripts/load_raw.py
 3. Данные (`data/`, `*.json.gz`) в git **не коммитим** — качаем скриптом.
 4. Задачи и план — в [docs/TASKS.md](docs/TASKS.md). Сделал задачу — поставь `[x]` и допиши строку в журнал.
 5. Запустить ETL и расчет витрин (Человек 2 — Spark)
-docker compose up --build spark-etl (Spark прочитает данные из MinIO, проведет очистку, рассчитает 3 витрины и сохранит их в ClickHouse).
+docker compose up --build spark-etl
+(Spark прочитает данные из MinIO, проведет очистку, рассчитает 3 витрины и сохранит их в ClickHouse).
