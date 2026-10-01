@@ -18,10 +18,10 @@
 
 ## Этап 2 — ETL — Человек 2
 
-- [ ] PySpark-парсер событий: PushEvent, WatchEvent, ForkEvent, PullRequestEvent
-- [ ] Очистка: выбросы, null-значения, дубли
-- [ ] Витрины: активность по языкам / репозиториям / часам
-- [ ] Выгрузка агрегатов в ClickHouse (`gh.events_parsed` и витрины)
+- [x] PySpark-парсер событий: PushEvent, WatchEvent, ForkEvent, PullRequestEvent
+- [x] Очистка: выбросы, null-значения, дубли
+- [x] Витрины: активность по языкам / репозиториям / часам
+- [x] Выгрузка агрегатов в ClickHouse (`gh.events_parsed` и витрины)
 
 ## Этап 3 — ML — Человек 3
 
