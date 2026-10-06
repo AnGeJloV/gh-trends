@@ -63,10 +63,6 @@ services:
       exit 0
       "
 
-volumes:
-  clickhouse_data:
-  minio_data:
-
   # --- Зона Человека 2 (Spark-разработчик): Распределенный ETL-пайплайн ---
   # Забирает сырые архивы из MinIO (бакет raw), парсит Push/Watch/Fork/PR события,
   # проводит дедупликацию и очистку, строит 3 витрины и загружает их в ClickHouse.

@@ -1,0 +1,9 @@
+# Зависимости ML-модуля (Человек 3).
+# Ставятся поверх корневого requirements.txt: pip install -r ml/requirements.txt
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.4
+catboost>=1.2
+joblib>=1.3
+clickhouse-connect>=0.7
+matplotlib>=3.8

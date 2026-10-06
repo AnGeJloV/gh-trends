@@ -86,3 +86,10 @@ python scripts/load_raw.py
 5. Запустить ETL и расчет витрин (Человек 2 — Spark)
 ``` docker compose up --build spark-etl ```
 (Spark прочитает данные из MinIO, проведет очистку, рассчитает 3 витрины и сохранит их в ClickHouse).
+
+6. Запустить ML-модель прогноза заброшенности репо (Человек 3)
+```
+pip install -r ml/requirements.txt
+python ml/train.py
+```
+(Соберет признаки из `gh.events_parsed` в ClickHouse, обучит бейслайн LogisticRegression + CatBoost, напечатает метрики и выгрузит прогнозы в `gh.ml_repo_predictions` — оттуда их читает дашборд. Самотест без реальных данных: `python ml/train.py --smoke`. Подробности — в [ml/README.md](ml/README.md).)
