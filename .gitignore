@@ -4,6 +4,12 @@ data/
 *.parquet
 *.csv
 
+# Локальные настройки пайплайна (период скачивания и т.п.) — см. .env.example
+.env
+
+# Артефакты обучения CatBoost (на случай запуска старых версий ml/train.py)
+catboost_info/
+
 # Python
 __pycache__/
 *.pyc

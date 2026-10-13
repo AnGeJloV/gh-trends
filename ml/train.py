@@ -19,6 +19,7 @@
 import argparse
 import json
 import time
+from datetime import datetime
 from pathlib import Path
 
 import joblib
@@ -76,12 +77,17 @@ def make_models():
 
 def fit_catboost(X_tr, y_tr, X_val=None, y_val=None):
     from catboost import CatBoostClassifier, Pool
+    train_dir = Path(__file__).resolve().parent / "reports" / "catboost_info"
+    train_dir.mkdir(parents=True, exist_ok=True)  # CatBoost сам папку не создаёт
     train_pool = Pool(X_tr, y_tr)
     eval_pool = Pool(X_val, y_val) if X_val is not None else None
     model = CatBoostClassifier(
         iterations=500, learning_rate=0.05, depth=6,
         auto_class_weights="Balanced", loss_function="Logloss",
         random_seed=RANDOM_STATE, verbose=0,
+        # Логи обучения — в ml/reports/ (загнорирована в ml/.gitignore),
+        # иначе CatBoost пишет catboost_info/ в cwd (корень репо).
+        train_dir=str(train_dir),
     )
     model.fit(train_pool, eval_set=eval_pool, early_stopping_rounds=50,
               verbose_eval=False)
@@ -183,14 +189,18 @@ def export_predictions(client, predict_df, fitted_model, model_name, threshold):
     rows["model"] = model_name
     out = rows[["snapshot_date", "repo_id", "repo_name", "language",
                 "probability", "prediction", "label", "model"]].copy()
-    out["snapshot_date"] = out["snapshot_date"].dt.date
+    # snapshot_date приходит из features.py объектами date (object-dtype) —
+    # приводим к date через to_datetime, иначе .dt и вставка в Date падают
+    out["snapshot_date"] = pd.to_datetime(out["snapshot_date"]).dt.date
     ensure_output_tables(client)
     client.insert_df(f"{db}.{config.PREDICTIONS_TABLE}", out)
 
 
 def export_metrics(client, metrics_list, dataset_rows, abandoned_share):
     db = config.CLICKHOUSE_DB
-    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    # DateTime-колонка в ClickHouse: нужен datetime, а не строка (иначе
+    # clickhouse-connect падает с 'str' object has no timestamp)
+    now = datetime.now().replace(microsecond=0)
     rows = [{
         "trained_at": now,
         "model": m["model"],

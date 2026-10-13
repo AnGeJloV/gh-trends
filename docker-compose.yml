@@ -11,6 +11,9 @@ services:
       - "8123:8123"   # HTTP-интерфейс (через него работают все клиенты)
     volumes:
       - clickhouse_data:/var/lib/clickhouse          # данные переживают перезапуск
+      # DDL витрин при первом старте (только на пустом volume; для уже
+      # поднятых инстансов схему гарантирует сервис loader -> init_db.py)
+      - ./etl/init_clickhouse.sql:/docker-entrypoint-initdb.d/init_clickhouse.sql:ro
     ulimits:
       nofile:
         soft: 262144
@@ -63,10 +66,51 @@ services:
       exit 0
       "
 
+  # --- Зона Человека 1: одноразовая загрузка данных ---
+  # Создаёт схему в ClickHouse, скачивает архивы GH Archive в ./data
+  # (volume — повторный запуск докачает только новое), заливает их
+  # в MinIO (бакет raw) и в gh.events_raw. После успеха завершается.
+  loader:
+    build:
+      context: .            # корень: нужен etl/init_clickhouse.sql
+      dockerfile: scripts/Dockerfile
+    container_name: gh_loader
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      CH_HOST: "clickhouse"
+      CH_PORT: "8123"
+      CH_USER: "default"
+      CH_PASSWORD: "clickhouse"
+      MINIO_ENDPOINT: "http://minio:9000"
+      MINIO_USER: "minioadmin"
+      MINIO_PASSWORD: "minioadmin"
+      # Период скачивания. Значения по умолчанию — 3 дневных часа
+      # (быстрый прогон). Свой период задайте в файле .env (см. .env.example),
+      # например DOWNLOAD_FROM=2026-09-01 и DOWNLOAD_TO=2026-09-30 —
+      # скачает весь период (~несколько ГБ, долго; нужно для ML).
+      DOWNLOAD_FROM: "${DOWNLOAD_FROM:-2026-09-20}"
+      DOWNLOAD_HOURS: "${DOWNLOAD_HOURS:-3}"
+      DOWNLOAD_START_HOUR: "${DOWNLOAD_START_HOUR:-16}"
+      DOWNLOAD_TO: "${DOWNLOAD_TO:-}"
+    volumes:
+      - ./data:/app/data
+
   # --- Зона Человека 2 (Spark-разработчик): Распределенный ETL-пайплайн ---
   # Забирает сырые архивы из MinIO (бакет raw), парсит Push/Watch/Fork/PR события,
   # проводит дедупликацию и очистку, строит 3 витрины и загружает их в ClickHouse.
+  # Сервисы spark-etl и ml-trainer вынесены в профиль pipeline: они тяжёлые
+  # (полный перепарсинг ~25 мин + обучение ~10 мин), поэтому НЕ должны
+  # перезапускаться при каждом `docker compose up -d`.
+  # Полный пересчёт запускается явно:
+  #   docker compose --profile pipeline up -d
   spark-etl:
+    profiles: ["pipeline"]
     build:
       context: ./etl
       dockerfile: Dockerfile
@@ -78,6 +122,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      loader:
+        condition: service_completed_successfully
     environment:
       MINIO_ENDPOINT: "http://minio:9000"
       MINIO_ACCESS_KEY: "minioadmin"
@@ -88,6 +134,50 @@ services:
       CLICKHOUSE_DB: "gh"
       CLICKHOUSE_USER: "default"
       CLICKHOUSE_PASSWORD: "clickhouse"
+
+  # --- Зона Человека 3 (Data Scientist): обучение ML-модели ---
+  # Одноразовый: запускается после spark-etl, обучает модели и пишет
+  # прогнозы в gh.ml_repo_predictions + метрики в gh.ml_model_metrics.
+  # Требует истории >= ~3 недель (иначе завершится с ошибкой — это ок
+  # для быстрого прогона, дашборд и витрины продолжат работать).
+  ml-trainer:
+    profiles: ["pipeline"]
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: gh_ml_trainer
+    depends_on:
+      spark-etl:
+        condition: service_completed_successfully
+    environment:
+      CLICKHOUSE_HOST: "clickhouse"
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DB: "gh"
+      CLICKHOUSE_USER: "default"
+      CLICKHOUSE_PASSWORD: "clickhouse"
+
+  # --- Зона Человека 4 (BI): Streamlit-дашборд ---
+  # ПОКА В ПРОФИЛЕ: сервис активируется, когда Человек 4 добавит в
+  # dashboard/ файлы app.py и Dockerfile. Тогда убрать строку profiles —
+  # и дашборд станет частью общего `docker compose up -d`.
+  # Вручную сейчас: streamlit run dashboard/app.py
+  dashboard:
+    profiles: ["dashboard"]
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: gh_dashboard
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_HOST: "clickhouse"
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DB: "gh"
+      CLICKHOUSE_USER: "default"
+      CLICKHOUSE_PASSWORD: "clickhouse"
+    ports:
+      - "8501:8501"   # http://localhost:8501 — радар IT-трендов
 
 volumes:
   clickhouse_data:

@@ -9,6 +9,7 @@
 # Файлы кладутся в data/raw/YYYY-MM-DD-H.json.gz. Уже скачанные пропускаются (можно докачать повторным запуском).
 
 import argparse
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -63,6 +64,31 @@ def download(session: requests.Session, url: str, dest: Path) -> None:
     tmp.rename(dest)
 
 
+def already_in_clickhouse() -> set[str]:
+    """Имена файлов, уже загруженных в gh.events_raw (по source_file).
+
+    Включается автоматически, если задан CH_HOST (как в контейнере loader).
+    Позволяет безопасно удалять локальные копии из data/raw после загрузки:
+    повторный запуск loader не перекачает уже загруженное в ClickHouse.
+    """
+    if not os.getenv("CH_HOST"):
+        return set()
+    try:
+        import clickhouse_connect
+        client = clickhouse_connect.get_client(
+            host=os.getenv("CH_HOST"),
+            port=int(os.getenv("CH_PORT", "8123")),
+            username=os.getenv("CH_USER", "default"),
+            password=os.getenv("CH_PASSWORD", "clickhouse"),
+        )
+        res = client.query("SELECT DISTINCT source_file FROM gh.events_raw")
+        # source_file хранится как stem без .gz: 2026-09-20-16.json
+        return {f"{row[0]}.gz" for row in res.result_rows}
+    except Exception as e:
+        print(f"  ВНИМАНИЕ: не удалось свериться с ClickHouse ({e}) — качаю без пропусков")
+        return set()
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Скачивает архивы GH Archive. Без аргументов — 3 дневных часа с 2026-09-20")
     p.add_argument("--from", dest="from_", default="2026-09-20", help="начало, YYYY-MM-DD (по умолчанию 2026-09-20; период проекта — с 2026-09-01, но этот день почти пуст)")
@@ -88,6 +114,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     session = make_session()
+    loaded = already_in_clickhouse()
     total = 0
     skipped = 0
     failed = 0
@@ -95,7 +122,7 @@ def main() -> None:
         name = f"{day.isoformat()}-{hour}.json.gz"
         dest = out_dir / name
         url = f"{BASE_URL}/{name}"
-        if dest.exists():
+        if dest.exists() or name in loaded:
             skipped += 1
             continue
         print(f"{name} <- {url}")
