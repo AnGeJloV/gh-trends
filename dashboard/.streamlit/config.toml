@@ -1,9 +1,12 @@
 [theme]
-base = "dark"
-primaryColor = "#7c5cff"
-backgroundColor = "#0b0e14"
-secondaryBackgroundColor = "#141926"
-textColor = "#e8ebf4"
+base = "light"
+primaryColor = "#14b8b0"
+# белый фон нужен таблицам (st.dataframe берёт его для ячеек);
+# фон страницы задаётся градиентом в app.py
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#eef5f9"
+textColor = "#0f2b46"
+font = "sans serif"
 
 [server]
 headless = true
