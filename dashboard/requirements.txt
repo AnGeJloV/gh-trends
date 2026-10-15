@@ -1,0 +1,5 @@
+# Зависимости дашборда (Человек 4)
+streamlit>=1.39
+plotly>=5.24
+clickhouse-connect>=0.8
+pandas>=2.0

@@ -162,7 +162,7 @@ services:
   # и дашборд станет частью общего `docker compose up -d`.
   # Вручную сейчас: streamlit run dashboard/app.py
   dashboard:
-    profiles: ["dashboard"]
+    
     build:
       context: ./dashboard
       dockerfile: Dockerfile

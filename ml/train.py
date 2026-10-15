@@ -178,10 +178,15 @@ def ensure_output_tables(client):
     """)
 
 
-def export_predictions(client, predict_df, fitted_model, model_name, threshold):
+def export_predictions(client, predict_df, fitted_model, model_name, threshold, feature_columns):
     db = config.CLICKHOUSE_DB
     rows = predict_df.copy()
     X, _, _ = prepare_matrix(rows)
+    # One-hot колонки языков при prepare_matrix(predict_df) могут отличаться
+    # от обучающих (другой топ-15 и порядок) — приводим к обучающей схеме:
+    # отсутствующие языковые колонки заполняем нулями, лишние отбрасываем.
+    # Иначе CatBoost падает: "At position N should be feature with name ..."
+    X = X.reindex(columns=feature_columns, fill_value=0.0)
     proba = fitted_model.predict_proba(X)[:, 1]
     rows["probability"] = proba.astype("float32")
     rows["prediction"] = (proba >= threshold).astype("uint8")
@@ -291,7 +296,8 @@ def run_training(client, out_dir: Path, do_export: bool) -> dict:
             print("Прогнозы не выгружены: нет снимка с незакрытым окном исхода "
                   "(данные заканчиваются ровно на границе окна).")
         else:
-            export_predictions(client, predict_df, fitted[best["model"]], best["model"], best["threshold"])
+            export_predictions(client, predict_df, fitted[best["model"]], best["model"], best["threshold"],
+                               feature_columns=list(X.columns))
             print(f"Экспорт в ClickHouse: {len(predict_df)} прогнозов -> "
                   f"{config.CLICKHOUSE_DB}.{config.PREDICTIONS_TABLE}")
 
